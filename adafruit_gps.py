@@ -86,7 +86,7 @@ def _parse_degrees(nmea_data):
     raw = nmea_data.split(".")
     degrees = int(raw[0]) // 100 * 1000000  # the ddd
     minutes = int(raw[0]) % 100  # the mm.
-    minutes += int(f"{raw[1][:4]:0<4}") / 10000
+    minutes += int((raw[1][:4] + "0000")[:4]) / 10000
     minutes = int(minutes / 60 * 1000000)
     return degrees + minutes  # return parsed string in the format dddmmmmmm
 
@@ -199,7 +199,7 @@ def _parse_data(sentence_type, data):
                 else:
                     params.append(dti)
             else:
-                raise TypeError(f"GPS: Unexpected parameter type '{pti}'")
+                raise TypeError("GPS: Unexpected parameter type" + pti)
     except ValueError:
         # Something didn't parse, abort
         return None
@@ -354,7 +354,7 @@ class GPS:
     @property
     def in_waiting(self):
         """Returns number of bytes available in UART read buffer"""
-        return self._uart.in_waiting
+        return self._uart.any()
 
     def readline(self):
         """Returns a newline terminated bytearray, must have timeout set for
@@ -419,17 +419,15 @@ class GPS:
             if self.timestamp_utc is None:
                 day, month, year = 0, 0, 0
             else:
-                day = self.timestamp_utc.tm_mday
-                month = self.timestamp_utc.tm_mon
-                year = self.timestamp_utc.tm_year
+                day = self.timestamp_utc[2]
+                month = self.timestamp_utc[1]
+                year = self.timestamp_utc[0]
         else:
             day = int(date[0:2])
             month = int(date[2:4])
             year = 2000 + int(date[4:6])
 
-        self.timestamp_utc = time.struct_time(
-            (year, month, day, hours, mins, secs, 0, 0, -1)
-        )
+        self.timestamp_utc = (year, month, day, hours, mins, secs, 0, 0)
 
     def _parse_gll(self, data):
         # GLL - Geographic Position - Latitude/Longitude
@@ -621,7 +619,7 @@ class GPS:
         sat_tup = data[3:]
 
         satlist = []
-        timestamp = time.monotonic()
+        timestamp = time.time()
         for i in range(len(sat_tup) // 4):
             j = i * 4
             value = (
@@ -652,7 +650,7 @@ class GPS:
                 else:
                     # Remove all satellites which haven't
                     # been seen for 30 seconds
-                    timestamp = time.monotonic()
+                    timestamp = time.time()
                     old = []
                     for i in self.sats:
                         sat = self.sats[i]
@@ -719,8 +717,8 @@ class GPS_GtopI2C(GPS):
     def readline(self):
         """Returns a newline terminated bytearray, must have timeout set for
         the underlying UART or this will block forever!"""
-        timeout = time.monotonic() + self._timeout
-        while timeout > time.monotonic():
+        timeout = time.time() + self._timeout
+        while timeout > time.time():
             # check if our internal buffer has a '\n' termination already
             if self._internalbuffer and (self._internalbuffer[-1] == 0x0A):
                 break
