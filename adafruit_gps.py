@@ -673,14 +673,12 @@ class GPS_GtopI2C(GPS):
     """
 
     def __init__(
-        self, i2c_bus, *, address=_GPSI2C_DEFAULT_ADDRESS, debug=False, timeout=5
+        self, i2c, *, address=_GPSI2C_DEFAULT_ADDRESS, debug=False, timeout=5
     ):
-        from adafruit_bus_device import (  # pylint: disable=import-outside-toplevel
-            i2c_device,
-        )
 
         super().__init__(None, debug)  # init the parent with no UART
-        self._i2c = i2c_device.I2CDevice(i2c_bus, address)
+        self._i2c = i2c
+        self._i2c_address = address
         self._lastbyte = None
         self._charbuff = bytearray(1)
         self._internalbuffer = []
@@ -691,15 +689,14 @@ class GPS_GtopI2C(GPS):
         Returns a bytearray with up to num_bytes or None if nothing was read"""
         result = []
         for _ in range(num_bytes):
-            with self._i2c as i2c:
-                # we read one byte at a time, verify it isnt part of a string of
-                # 'stuffed' newlines and then append to our result array for byteification
-                i2c.readinto(self._charbuff)
-                char = self._charbuff[0]
-                if (char == 0x0A) and (self._lastbyte != 0x0D):
-                    continue  # skip duplicate \n's!
-                result.append(char)
-                self._lastbyte = char  # keep track of the last character approved
+            # we read one byte at a time, verify it isnt part of a string of
+            # 'stuffed' newlines and then append to our result array for byteification
+            self._i2c.readfrom_into(self._i2c_address, self._charbuff)
+            char = self._charbuff[0]
+            if (char == 0x0A) and (self._lastbyte != 0x0D):
+                continue  # skip duplicate \n's!
+            result.append(char)
+            self._lastbyte = char  # keep track of the last character approved
         return bytearray(result)
 
     def write(self, bytestr):
